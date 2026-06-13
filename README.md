@@ -1,6 +1,9 @@
 Secure File Upload and OCR Processing System using Azure PaaS with Private Networking
+
 📌 Overview
+
 This project demonstrates how to build a secure, cloud native file upload and text extraction pipeline using Azure PaaS services. It is implemented in two phases:
+
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/cc340ce8-5c49-4c3f-af2e-dbc9fa6b6f9a" />
 
 •	Phase 1: Public Implementation — Deploy a Python Flask web app to Azure App Service, integrate with Blob Storage, and process uploaded files using Azure Functions + Cognitive Services (OCR).
