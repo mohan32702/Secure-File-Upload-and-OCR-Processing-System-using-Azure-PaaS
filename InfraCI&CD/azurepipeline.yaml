@@ -1,0 +1,109 @@
+trigger:
+- master
+
+pool:
+  name: 'Azure VM SH Pool'   # Your Windows agent
+
+variables:
+  workingDir: '$(System.DefaultWorkingDirectory)'
+
+stages:
+
+# =====================================
+# DEV DEPLOY
+# =====================================
+- stage: Dev
+  displayName: "Deploy Dev"
+  jobs:
+  - job: DevDeploy
+    steps:
+
+    - task: AzureCLI@2
+      displayName: "Terraform Dev Deployment"
+      inputs:
+        azureSubscription: 'azure-terraform SPN'
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd $(workingDir)
+
+          terraform init -reconfigure `
+          -backend-config="key=dev.tfstate"
+
+          terraform validate
+
+          terraform plan -var-file="dev.tfvars" -out=tfplan
+          terraform apply -auto-approve tfplan
+
+
+# =====================================
+# PROD PLAN
+# =====================================
+- stage: Prod_Plan
+  displayName: "Plan Prod"
+  dependsOn: Dev
+  jobs:
+  - job: Plan
+    steps:
+
+    - task: AzureCLI@2
+      displayName: "Terraform Plan Prod"
+      inputs:
+        azureSubscription: 'azure-terraform SPN'
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd $(workingDir)
+
+          terraform init -reconfigure `
+          -backend-config="key=prod.tfstate"
+
+          terraform plan -var-file="prod.tfvars" -out=tfplan
+
+    - publish: $(workingDir)\tfplan
+      artifact: tfplan
+
+
+# =====================================
+# PROD APPROVAL
+# =====================================
+- stage: Prod_Approval
+  displayName: "Approve Prod"
+  dependsOn: Prod_Plan
+  jobs:
+  - job: Approval
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: "Approve Production Deployment"
+
+
+# =====================================
+# PROD APPLY
+# =====================================
+- stage: Prod_Apply
+  displayName: "Deploy Prod"
+  dependsOn: Prod_Approval
+  jobs:
+  - job: Apply
+    steps:
+
+    - download: current
+      artifact: tfplan
+
+    - task: AzureCLI@2
+      displayName: "Terraform Apply Prod"
+      inputs:
+        azureSubscription: 'azure-terraform SPN'
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd $(workingDir)
+
+         
+          terraform init -reconfigure `
+          -backend-config="key=prod.tfstate"
+
+          # 👇 Correct path to tfplan
+          terraform apply -auto-approve "$(Pipeline.Workspace)/tfplan/tfplan"

@@ -1,0 +1,110 @@
+trigger:
+- WeAppDeploy
+
+pool:
+  name: 'WebAppDeploy'
+
+variables:
+  appName: 'securefileupload1'
+  resourceGroup: 'azr-hrf-dev'
+
+stages:
+
+# =========================
+# STAGE 1: BUILD (CI)
+# =========================
+- stage: Build
+  jobs:
+  - job: BuildJob
+    steps:
+
+    # Step 1: Install prerequisites
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y python3-venv python3-pip zip
+      displayName: 'Install prerequisites (venv + pip + zip)'
+
+    # Step 2: Create virtual environment
+    - script: |
+        python3 -m venv .venv
+      displayName: 'Create virtual environment'
+
+    # Step 3: Install dependencies
+    - script: |
+        .venv/bin/python -m pip install --upgrade pip
+        .venv/bin/pip install -r requirements.txt
+      displayName: 'Install dependencies in venv'
+
+    # Step 4: Archive files
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+
+    # Step 5: Publish Artifact
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
+        artifactName: 'drop'
+
+
+# =========================
+# STAGE 2: DEPLOY TO STAGING
+# =========================
+- stage: Deploy_Staging
+  dependsOn: Build
+  jobs:
+  - deployment: DeployStaging
+    environment: 'staging'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: 'azure-terraform SPN'
+              appType: 'webAppLinux'
+              appName: '$(appName)'
+              deployToSlotOrASE: true
+              resourceGroupName: '$(resourceGroup)'
+              slotName: 'staging'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
+
+
+# =========================
+# STAGE 3: APPROVAL + DEPLOY TO PROD
+# =========================
+- stage: Deploy_Prod
+  dependsOn: Deploy_Staging
+  jobs:
+
+  # 🔐 Manual Approval Job
+  - job: ApprovalJob
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Please validate staging and approve deployment to Production'
+        notifyUsers: 'your-email@domain.com'
+        timeoutInMinutes: 1440   # 24 hours
+
+  # 🚀 Production Swap (runs after approval)
+  - deployment: DeployProd
+    dependsOn: ApprovalJob
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureAppServiceManage@0
+            inputs:
+              azureSubscription: 'azure-terraform SPN'
+              Action: 'Swap Slots'
+              WebAppName: '$(appName)'
+              ResourceGroupName: '$(resourceGroup)'
+              SourceSlot: 'staging'
