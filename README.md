@@ -47,7 +47,7 @@ Phase 2
 
 🚀 CI/CD Pipelines
 
-Infra CI/CD (Terraform)
+Infra CI/CD (Folder: InfraCI&CD)
 
 This pipeline automates infrastructure deployment using Terraform:
 1.	Trigger — Runs on master branch using self hosted agent (Azure VM SH Pool).
@@ -56,7 +56,7 @@ This pipeline automates infrastructure deployment using Terraform:
 4.	Prod Approval — Manual validation step before Prod deployment.
 5.	Prod Apply — Downloads the approved plan and applies it safely to Prod.
 
-Web App CI/CD (App Deployment)
+Web App CI/CD (Folder: WebAppCI&CD)
 
 This pipeline automates application deployment:
 1.	Trigger & Pool — Runs on WeAppDeploy branch using self hosted agent (WebAppDeploy).
